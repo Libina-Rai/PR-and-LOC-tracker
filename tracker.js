@@ -1,8 +1,8 @@
 // tracker.js
-
-require("dotenv").config();
-const { Octokit } = require("@octokit/rest");
-const cron = require("node-cron");
+import { Octokit } from "@octokit/rest";
+import dotenv from "dotenv";
+import cron from "node-cron";
+dotenv.config();
 
 // --- GitHub Setup ---
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
@@ -10,7 +10,7 @@ const repoOwner = process.env.GITHUB_REPO_OWNER;
 const repoName = process.env.GITHUB_REPO_NAME;
 
 // --- Team Members ---
-const teamMembers = ["mushkan27", "Nepsoul"];
+const teamMembers = ["Libina-Rai"];
 
 // --- Function to get PR count for a user today ---
 async function getPRCount(user) {
@@ -49,7 +49,6 @@ async function getLOC(user) {
     const commits = await octokit.rest.repos.listCommits({
       owner: repoOwner,
       repo: repoName,
-      sha: "samay", // branch name
       since: since.toISOString(),
       until: until.toISOString(),
       per_page: 100,
