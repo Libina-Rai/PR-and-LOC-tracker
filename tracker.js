@@ -2,6 +2,7 @@
 import { Octokit } from "@octokit/rest";
 import dotenv from "dotenv";
 import cron from "node-cron";
+
 dotenv.config();
 
 // --- GitHub Setup ---
@@ -10,7 +11,7 @@ const repoOwner = process.env.GITHUB_REPO_OWNER;
 const repoName = process.env.GITHUB_REPO_NAME;
 
 // --- Team Members ---
-const teamMembers = ["Libina-Rai"];
+const teamMembers = ["Libina-Rai"]; // add more members if needed
 
 // --- Function to get PR count for a user today ---
 async function getPRCount(user) {
@@ -37,49 +38,48 @@ async function getPRCount(user) {
   return todayPRs.length;
 }
 
-// --- Function to get LOC for a user today ---
+// --- Function to get LOC from PRs created today ---
 async function getLOC(user) {
-  try {
-    const since = new Date();
-    since.setHours(0, 0, 0, 0);
+  const since = new Date();
+  since.setHours(0, 0, 0, 0);
 
-    const until = new Date();
-    until.setHours(23, 59, 59, 999);
+  const until = new Date();
+  until.setHours(23, 59, 59, 999);
 
-    const commits = await octokit.rest.repos.listCommits({
+  const prs = await octokit.rest.pulls.list({
+    owner: repoOwner,
+    repo: repoName,
+    state: "all",
+    per_page: 100,
+  });
+
+  let added = 0;
+  let deleted = 0;
+
+  // Filter PRs created today by the user
+  const todayPRs = prs.data.filter(
+    (pr) =>
+      pr.user.login === user &&
+      new Date(pr.created_at) >= since &&
+      new Date(pr.created_at) <= until
+  );
+
+  // Sum LOC from each PR
+  for (const pr of todayPRs) {
+    const detail = await octokit.rest.pulls.get({
       owner: repoOwner,
       repo: repoName,
-      since: since.toISOString(),
-      until: until.toISOString(),
-      per_page: 100,
+      pull_number: pr.number,
     });
 
-    let added = 0;
-    let deleted = 0;
-
-    for (const commit of commits.data) {
-      if (commit.author && commit.author.login === user) {
-        const detail = await octokit.rest.repos.getCommit({
-          owner: repoOwner,
-          repo: repoName,
-          ref: commit.sha,
-        });
-
-        added += detail.data.stats.additions;
-        deleted += detail.data.stats.deletions;
-      }
-    }
-
-    const net = added - deleted;
-
-    return { added, deleted, net };
-  } catch (err) {
-    console.error(`Error fetching LOC for ${user}:`, err.message);
-    return { added: 0, deleted: 0, net: 0 };
+    added += detail.data.additions;
+    deleted += detail.data.deletions;
   }
+
+  return { added, deleted, net: added - deleted };
 }
 
-// --- Generate Report ---
+// --- Generate Daily Report ---
 async function generateReport() {
   console.log("Daily Team Report:");
 
@@ -95,10 +95,10 @@ async function generateReport() {
   }
 }
 
-// --- Schedule Daily Cron Job ---
+// --- Schedule Cron Job ---
 // Runs every day at 6 PM
 cron.schedule("0 18 * * *", async () => {
-  console.log("Running daily team report at 6 PM...");
+  console.log("\nRunning daily team report at 6 PM...");
   await generateReport();
 });
 
